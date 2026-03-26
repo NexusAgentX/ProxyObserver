@@ -1,140 +1,148 @@
 import index from "./index.html";
-import { appName, routeCatalog } from "./siteData";
+import { adminPort, appName, captureLimit, listenHost } from "./config";
+import { clearCaptures, getCapture, listCaptureSummaries, listListeners, removeListener, upsertListener } from "./runtime";
+import type { ListenerPayload, OverviewResponse } from "./types";
 
-const startedAt = Date.now();
-const port = Number(process.env.PORT ?? 3000);
-
-async function readRequestBody(request: Request) {
-  if (request.method === "GET" || request.method === "HEAD") {
-    return null;
-  }
-
-  const contentType = request.headers.get("content-type") ?? "";
-
-  if (contentType.includes("application/json")) {
-    try {
-      return await request.json();
-    } catch (error) {
-      return {
-        parseError: error instanceof Error ? error.message : "Invalid JSON payload",
-      };
-    }
-  }
-
-  if (
-    contentType.includes("application/x-www-form-urlencoded") ||
-    contentType.includes("multipart/form-data")
-  ) {
-    const formData = await request.formData();
-    const fields: Record<string, string | { name: string; size: number; type: string }> = {};
-
-    for (const [key, value] of formData.entries()) {
-      if (typeof value === "string") {
-        fields[key] = value;
-        continue;
-      }
-
-      const file = value as File;
-      fields[key] = {
-        name: file.name,
-        size: file.size,
-        type: file.type,
-      };
-    }
-
-    return fields;
-  }
-
-  const text = await request.text();
-  return text.length > 0 ? text : null;
+function json(data: unknown, init?: ResponseInit) {
+  return Response.json(data, init);
 }
 
-function collectSearchParams(searchParams: URLSearchParams) {
-  const query: Record<string, string | string[]> = {};
-
-  for (const key of new Set(searchParams.keys())) {
-    const values = searchParams.getAll(key);
-    query[key] = values.length > 1 ? values : (values[0] ?? "");
-  }
-
-  return query;
+function createOverview(): OverviewResponse {
+  return {
+    appName,
+    adminPort,
+    listenHost,
+    captureLimit,
+    listeners: listListeners(),
+    captures: listCaptureSummaries(),
+  };
 }
 
-async function inspectRequest(request: Request) {
-  const url = new URL(request.url);
-  const headers: Record<string, string> = {};
+async function readJson<T>(request: Request) {
+  try {
+    return (await request.json()) as T;
+  } catch {
+    throw new Error("Request body must be valid JSON");
+  }
+}
 
-  request.headers.forEach((value, key) => {
-    headers[key] = value;
-  });
+function parsePort(portValue: string) {
+  const port = Number(portValue);
 
-  return Response.json({
-    service: appName,
-    receivedAt: new Date().toISOString(),
-    method: request.method,
-    path: url.pathname,
-    query: collectSearchParams(url.searchParams),
-    headers,
-    body: await readRequestBody(request),
-  });
+  if (!Number.isInteger(port)) {
+    throw new Error("Port must be an integer");
+  }
+
+  return port;
 }
 
 const server = Bun.serve({
-  port,
+  hostname: listenHost,
+  port: adminPort,
   routes: {
     "/api/health": {
       GET() {
-        return Response.json({
+        return json({
           ok: true,
           service: appName,
-          environment: process.env.NODE_ENV ?? "development",
+          adminPort,
+          listenHost,
+          captureLimit,
+          listeners: listListeners().length,
+          captures: listCaptureSummaries().length,
           timestamp: new Date().toISOString(),
-          uptimeSeconds: Number(((Date.now() - startedAt) / 1000).toFixed(1)),
-          capabilities: [
-            "Bun.serve routes",
-            "HTML import bundling",
-            "React frontend HMR",
-            "Executable packaging via bun build --compile",
-          ],
         });
       },
     },
 
-    "/api/routes": {
+    "/api/admin/overview": {
       GET() {
-        return Response.json({
-          service: appName,
-          routes: routeCatalog,
-        });
+        return json(createOverview());
       },
     },
 
-    "/api/inspect": {
+    "/api/admin/listeners": {
+      GET() {
+        return json({ listeners: listListeners() });
+      },
+      async POST(request) {
+        try {
+          const payload = await readJson<ListenerPayload>(request);
+          const listener = await upsertListener(payload);
+
+          return json(
+            {
+              listener: {
+                port: listener.port,
+                target: listener.target,
+                startedAt: listener.startedAt,
+                updatedAt: listener.updatedAt,
+                requestCount: listener.requestCount,
+              },
+            },
+            { status: 201 },
+          );
+        } catch (error) {
+          return json(
+            {
+              error: error instanceof Error ? error.message : "Failed to save listener",
+            },
+            { status: 400 },
+          );
+        }
+      },
+    },
+
+    "/api/admin/listeners/:port": {
+      async DELETE(request) {
+        try {
+          const deleted = await removeListener(parsePort(request.params.port));
+          if (!deleted) {
+            return json({ error: "Listener not found" }, { status: 404 });
+          }
+
+          return json({ ok: true });
+        } catch (error) {
+          return json(
+            {
+              error: error instanceof Error ? error.message : "Failed to remove listener",
+            },
+            { status: 400 },
+          );
+        }
+      },
+    },
+
+    "/api/admin/captures": {
+      GET() {
+        return json({ captures: listCaptureSummaries() });
+      },
+      DELETE() {
+        clearCaptures();
+        return json({ ok: true });
+      },
+    },
+
+    "/api/admin/captures/:id": {
       GET(request) {
-        return inspectRequest(request);
-      },
-      POST(request) {
-        return inspectRequest(request);
-      },
-      PUT(request) {
-        return inspectRequest(request);
-      },
-      PATCH(request) {
-        return inspectRequest(request);
-      },
-      DELETE(request) {
-        return inspectRequest(request);
+        const capture = getCapture(request.params.id);
+        if (!capture) {
+          return json({ error: "Capture not found" }, { status: 404 });
+        }
+
+        return json({ capture });
       },
     },
 
-    "/api/*": request =>
-      Response.json(
+    "/api/*": request => {
+      return json(
         {
-          error: "Unknown API route",
+          error: "Unknown admin API route",
           path: new URL(request.url).pathname,
         },
         { status: 404 },
-      ),
+      );
+    },
 
     "/*": index,
   },
@@ -147,7 +155,7 @@ const server = Bun.serve({
   error(error) {
     console.error(error);
 
-    return Response.json(
+    return json(
       {
         error: error instanceof Error ? error.message : "Unexpected server error",
       },
