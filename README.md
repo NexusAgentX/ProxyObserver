@@ -18,6 +18,8 @@
   </p>
   <p>
     <img src="https://img.shields.io/github/license/NexusAgentX/ProxyObserver?style=for-the-badge" alt="License">
+    <img src="https://img.shields.io/github/actions/workflow/status/NexusAgentX/ProxyObserver/ci.yml?branch=main&style=for-the-badge&label=CI" alt="CI">
+    <img src="https://img.shields.io/github/actions/workflow/status/NexusAgentX/ProxyObserver/release-please.yml?branch=main&style=for-the-badge&label=Release" alt="Release">
     <img src="https://img.shields.io/badge/Bun-runtime-black?style=for-the-badge&logo=bun" alt="Bun Runtime">
     <img src="https://img.shields.io/badge/React-19-149ECA?style=for-the-badge&logo=react&logoColor=white" alt="React 19">
     <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript 5">
@@ -154,7 +156,58 @@ bun run compile
 
 # type-check
 bun run typecheck
+
+# lint the current commit message file
+bun run commitlint
 ```
+
+## Versioning And Releases
+
+这个仓库已经配置好了现代化的 GitHub 自动发版链路：
+
+- `CI` workflow 会在 PR 和 `main` 分支上执行安装、类型检查、前端构建和可执行文件编译
+- `Release` workflow 会根据合并到 `main` 的 Conventional Commits 自动维护 release PR
+- `bun install` 后会自动启用本地 Git hooks，提前在提交前挡住明显问题
+- release PR 合并后，会自动更新 `package.json` 版本号与 [CHANGELOG.md](/Users/laysath/proj/ProxyObserver/CHANGELOG.md)
+- GitHub Release 创建后，同一个 workflow 会自动构建并上传多平台二进制资产与 `checksums.txt`
+- release 资产会附带 GitHub artifact attestation，便于后续做来源校验
+
+### Commit format
+
+为了让自动版本管理稳定工作，建议使用 Conventional Commits：
+
+- `feat: add response diff inspector`
+- `fix(proxy): preserve upstream headers`
+- `docs: refresh setup guide`
+- `refactor(runtime): simplify capture snapshots`
+
+如果你使用 squash merge，PR 标题最好也遵循同样格式，因为默认 squash commit message 会直接采用 PR 标题。
+
+### Local Git hooks
+
+仓库使用 Husky 自动安装本地 Git hooks。执行一次 `bun install` 后，会自动启用：
+
+- `commit-msg`: 用 `commitlint` 校验提交信息是否符合 Conventional Commits
+- `pre-commit`: 运行 `bun run typecheck`
+- `pre-push`: 运行 `bun run build`
+
+如果你在特殊场景下需要临时跳过本地钩子，可以显式设置 `HUSKY=0`，但 CI 和 GitHub 上的 release 流程仍然会继续检查。
+
+### Release flow
+
+1. 提交 PR，使用 Conventional Commit 风格的提交信息或 PR 标题
+2. 合并到 `main`
+3. `Release` workflow 自动创建或更新 release PR
+4. 合并 release PR
+5. GitHub 自动生成 tag 与 Release
+6. 同一个 `Release` workflow 自动附加以下产物：
+
+- `proxyobserver-linux-x64.tar.gz`
+- `proxyobserver-macos-x64.tar.gz`
+- `proxyobserver-macos-arm64.tar.gz`
+- `proxyobserver-windows-x64.zip`
+- 每个资产对应的 `.sha256`
+- 汇总的 `checksums.txt`
 
 ## Script Hooks
 
