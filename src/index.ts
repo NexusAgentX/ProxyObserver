@@ -75,6 +75,7 @@ const server = Bun.serve({
               listener: {
                 port: listener.port,
                 target: listener.target,
+                script: listener.script,
                 startedAt: listener.startedAt,
                 updatedAt: listener.updatedAt,
                 requestCount: listener.requestCount,

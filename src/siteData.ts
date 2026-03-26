@@ -25,4 +25,18 @@ export const quickNotes = [
 export const defaultListenerDraft = {
   port: "4100",
   target: "https://example.com",
+  script: "",
 };
+
+export const listenerScriptPlaceholder = `async function beforeRequest(context) {
+  const url = new URL(context.url);
+  url.searchParams.set("debug", "1");
+  context.url = url.toString();
+  context.headers["x-proxy-observer"] = "before-request";
+  return context;
+}
+
+async function afterResponse(context) {
+  context.headers["x-proxy-observer-response"] = "after-response";
+  return context;
+}`;
