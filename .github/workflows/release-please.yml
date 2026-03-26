@@ -5,6 +5,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Existing release tag to rebuild and upload assets for
+        required: false
+        type: string
 
 concurrency:
   group: release-please-${{ github.ref }}
@@ -17,6 +22,7 @@ permissions:
 
 jobs:
   release-please:
+    if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
@@ -31,10 +37,42 @@ jobs:
           config-file: .github/release-please-config.json
           manifest-file: .github/.release-please-manifest.json
 
+  resolve-release-context:
+    name: Resolve release context
+    if: ${{ always() }}
+    needs: release-please
+    runs-on: ubuntu-latest
+    outputs:
+      should_publish: ${{ steps.resolve.outputs.should_publish }}
+      tag_name: ${{ steps.resolve.outputs.tag_name }}
+
+    steps:
+      - name: Resolve tag
+        id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_TAG_NAME: ${{ inputs.tag_name }}
+          RELEASE_CREATED: ${{ needs.release-please.outputs.release_created }}
+          RELEASE_TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          should_publish=false
+          tag_name=
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$MANUAL_TAG_NAME" ]; then
+            should_publish=true
+            tag_name="$MANUAL_TAG_NAME"
+          elif [ "$RELEASE_CREATED" = "true" ] && [ -n "$RELEASE_TAG_NAME" ]; then
+            should_publish=true
+            tag_name="$RELEASE_TAG_NAME"
+          fi
+
+          echo "should_publish=$should_publish" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$tag_name" >> "$GITHUB_OUTPUT"
+
   build-assets:
     name: Build ${{ matrix.target }}
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
-    needs: release-please
+    if: ${{ needs.resolve-release-context.outputs.should_publish == 'true' }}
+    needs: resolve-release-context
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -48,7 +86,7 @@ jobs:
             target: linux-x64
             binary_name: proxyobserver
             archive_name: proxyobserver-linux-x64.tar.gz
-          - os: macos-13
+          - os: macos-15-intel
             target: macos-x64
             binary_name: proxyobserver
             archive_name: proxyobserver-macos-x64.tar.gz
@@ -68,7 +106,7 @@ jobs:
       - name: Checkout tagged source
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
+          ref: ${{ needs.resolve-release-context.outputs.tag_name }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -116,9 +154,9 @@ jobs:
 
   publish-assets:
     name: Publish release assets
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    if: ${{ needs.resolve-release-context.outputs.should_publish == 'true' }}
     needs:
-      - release-please
+      - resolve-release-context
       - build-assets
     runs-on: ubuntu-latest
     permissions:
@@ -139,5 +177,5 @@ jobs:
       - name: Upload assets to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+          TAG_NAME: ${{ needs.resolve-release-context.outputs.tag_name }}
         run: gh release upload "$TAG_NAME" release-assets/* --clobber
