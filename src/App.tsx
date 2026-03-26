@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import "./index.css";
 import { appName, dashboardPollIntervalMs, defaultListenerDraft, featureHighlights, quickNotes } from "./siteData";
-import type { BodySnapshot, CaptureRecord, CaptureSummary, ListenerSummary, OverviewResponse } from "./types";
+import type { BodySnapshot, CaptureRecord, ListenerSummary, OverviewResponse } from "./types";
 
 function formatDateTime(value: string | undefined) {
   if (!value) {
@@ -115,6 +115,8 @@ export function App() {
 
   const listeners = overview?.listeners ?? [];
   const captures = overview?.captures ?? [];
+  const runtimeAddress = `http://${overview?.listenHost ?? "127.0.0.1"}:${overview?.adminPort ?? 3000}`;
+  const liveState = overview ? "ONLINE" : "SYNCING";
 
   const saveListener = async () => {
     setIsSaving(true);
@@ -180,67 +182,64 @@ export function App() {
   };
 
   return (
-    <main className="page-shell">
-      <section className="hero-grid">
-        <div className="panel hero-panel">
+    <main className="app-shell">
+      <section className="masthead">
+        <div className="masthead-copy">
           <p className="eyebrow">Runtime Admin Console</p>
           <h1>{appName}</h1>
           <p className="lede">
-            一个随用随开的透明代理工具。管理面板固定端口运行，其他端口在运行时动态开启，把请求转发到你指定的
-            target host，同时把请求与响应完整记录到内存，供前端直接查看。
+            一个随用随开的透明代理工作台。管理面板固定端口运行，代理规则在运行时动态增删，所有请求与响应只记录在内存里，
+            方便直接观察 agent 到上游模型的真实 HTTP 行为。
           </p>
-
-          <div className="chip-row">
-            <span className="chip">Pure Bun</span>
-            <span className="chip">Dynamic ports</span>
-            <span className="chip">In-memory capture</span>
-            <span className="chip">Single executable</span>
-          </div>
         </div>
 
-        <aside className="panel status-panel">
-          <div className="panel-header">
-            <span>Admin Runtime</span>
-            <span className={overview ? "status-badge status-ok" : "status-badge"}>{overview ? "ONLINE" : "LOADING"}</span>
+        <aside className="masthead-aside">
+          <span className={`status-badge ${overview ? "status-ok" : ""}`}>{liveState}</span>
+          <div className="runtime-address">
+            <span>Panel</span>
+            <strong>{runtimeAddress}</strong>
           </div>
-
-          {overview ? (
-            <div className="status-stack">
-              <div className="status-row">
-                <span>Panel</span>
-                <strong>
-                  http://{overview.listenHost}:{overview.adminPort}
-                </strong>
-              </div>
-              <div className="status-row">
-                <span>Active listeners</span>
-                <strong>{listeners.length}</strong>
-              </div>
-              <div className="status-row">
-                <span>Capture slots</span>
-                <strong>{overview.captureLimit}</strong>
-              </div>
-              <div className="status-row">
-                <span>Buffered traffic</span>
-                <strong>{captures.length}</strong>
-              </div>
-              <div className="capability-list">
-                {quickNotes.map(item => (
-                  <span key={item} className="capability-pill">
-                    {item}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <p className="panel-copy">{loadError ? `管理端暂时不可用：${loadError}` : "正在连接管理面板。"}</p>
-          )}
+          <p className="aside-copy">
+            {overview
+              ? `当前已开启 ${listeners.length} 个监听端口，缓冲 ${captures.length} 条抓包记录。`
+              : loadError ?? "正在同步管理端状态。"}
+          </p>
+          <div className="note-stack">
+            {quickNotes.map(item => (
+              <p key={item} className="note-line">
+                {item}
+              </p>
+            ))}
+          </div>
         </aside>
       </section>
 
-      <section className="feature-grid">
+      <section className="summary-strip">
+        <article className="summary-block">
+          <span className="summary-label">Active listeners</span>
+          <strong>{listeners.length}</strong>
+          <p>运行中的代理端口数量</p>
+        </article>
+        <article className="summary-block">
+          <span className="summary-label">Buffered captures</span>
+          <strong>{captures.length}</strong>
+          <p>当前保存在内存里的抓包条目</p>
+        </article>
+        <article className="summary-block">
+          <span className="summary-label">Capture limit</span>
+          <strong>{overview?.captureLimit ?? "--"}</strong>
+          <p>达到上限后会自动丢弃最旧记录</p>
+        </article>
+        <article className="summary-block">
+          <span className="summary-label">Admin host</span>
+          <strong>{overview?.listenHost ?? "127.0.0.1"}</strong>
+          <p>默认仅本机可访问</p>
+        </article>
+      </section>
+
+      <section className="notes-grid">
         {featureHighlights.map(item => (
-          <article key={item.title} className="panel feature-card">
+          <article key={item.title} className="note-panel">
             <p className="feature-title">{item.title}</p>
             <p className="panel-copy">{item.body}</p>
           </article>
@@ -248,10 +247,14 @@ export function App() {
       </section>
 
       <section className="workspace-grid">
-        <article className="panel route-panel">
-          <div className="panel-header">
-            <span>Listener Rules</span>
-            <code>runtime only</code>
+        <article className="surface">
+          <div className="section-head">
+            <div>
+              <p className="section-kicker">Routing</p>
+              <h2>Listener Rules</h2>
+              <p className="section-copy">新增一个本地端口，并把整条请求链路透明转发到指定 target host。</p>
+            </div>
+            <span className="micro-label">runtime only</span>
           </div>
 
           <div className="listener-form">
@@ -290,22 +293,25 @@ export function App() {
 
           <div className="route-list">
             {listeners.length === 0 ? (
-              <div className="route-card">
+              <div className="empty-state">
                 <p className="panel-copy">还没有开启任何代理端口。先创建一条规则，然后把 agent 工具指向对应本地端口。</p>
               </div>
             ) : (
               listeners.map(listener => (
                 <div key={listener.port} className="route-card">
                   <div className="route-heading">
-                    <span className="route-method">PORT {listener.port}</span>
-                    <code className="route-path">{listener.target}</code>
+                    <div className="route-title-group">
+                      <span className="route-method">Port {listener.port}</span>
+                      <strong className="route-target">{listener.target}</strong>
+                    </div>
+                    <span className="route-endpoint">
+                      http://{overview?.listenHost ?? "127.0.0.1"}:{listener.port}
+                    </span>
                   </div>
-                  <p className="panel-copy">
-                    Local endpoint: http://{overview?.listenHost ?? "127.0.0.1"}:{listener.port}
-                  </p>
-                  <p className="panel-copy">
-                    Requests seen: {listener.requestCount} | Updated: {formatDateTime(listener.updatedAt)}
-                  </p>
+                  <div className="route-meta">
+                    <span>Requests: {listener.requestCount}</span>
+                    <span>Updated: {formatDateTime(listener.updatedAt)}</span>
+                  </div>
                   <div className="button-row compact-row">
                     <button
                       type="button"
@@ -327,9 +333,13 @@ export function App() {
           </div>
         </article>
 
-        <article className="panel tester-panel">
-          <div className="panel-header">
-            <span>Recent Captures</span>
+        <article className="surface surface-captures">
+          <div className="section-head">
+            <div>
+              <p className="section-kicker">Traffic</p>
+              <h2>Recent Captures</h2>
+              <p className="section-copy">点击任意一条流量查看完整请求头、请求体和上游响应。</p>
+            </div>
             <div className="panel-actions">
               <span className="response-meta">{captures.length} buffered</span>
               <button type="button" className="secondary-button" onClick={() => void clearAllCaptures()} disabled={isClearing}>
@@ -340,7 +350,7 @@ export function App() {
 
           <div className="capture-list">
             {captures.length === 0 ? (
-              <div className="capture-row empty-row">
+              <div className="empty-state">
                 <span>等代理流量进来后，这里会实时列出请求和响应。</span>
               </div>
             ) : (
@@ -354,10 +364,10 @@ export function App() {
                   }}
                 >
                   <span className="capture-main">
-                    <strong>
+                    <span className="capture-label">
                       {capture.method} :{capture.listenerPort}
-                      {capture.pathname}
-                    </strong>
+                    </span>
+                    <strong>{capture.pathname}</strong>
                     <span>{capture.target}</span>
                   </span>
                   <span className="capture-meta">
@@ -374,10 +384,14 @@ export function App() {
       </section>
 
       <section className="detail-grid">
-        <article className="panel detail-panel">
-          <div className="panel-header">
-            <span>Capture Detail</span>
-            <span className="response-meta">{selectedCapture ? selectedCapture.id : "none selected"}</span>
+        <article className="surface detail-surface">
+          <div className="section-head">
+            <div>
+              <p className="section-kicker">Inspector</p>
+              <h2>Capture Detail</h2>
+              <p className="section-copy">右侧列表选中的抓包会在这里展开，适合逐项核对 headers、body 和响应行为。</p>
+            </div>
+            <span className="micro-label">{selectedCapture ? selectedCapture.id : "none selected"}</span>
           </div>
 
           {selectedCapture ? (
@@ -403,7 +417,10 @@ export function App() {
 
               <div className="detail-columns">
                 <section className="detail-section">
-                  <h2>Request</h2>
+                  <div className="detail-section-head">
+                    <h3>Request</h3>
+                    <span className="micro-label">{selectedCapture.request.method}</span>
+                  </div>
                   <pre className="json-view">
                     {JSON.stringify(
                       {
@@ -417,12 +434,22 @@ export function App() {
                       2,
                     )}
                   </pre>
-                  <h3>Request Body</h3>
+                  <div className="detail-section-head secondary-head">
+                    <h4>Request Body</h4>
+                    <span className="micro-label">{selectedCapture.request.body.contentType ?? "no content-type"}</span>
+                  </div>
                   <pre className="body-view">{formatBody(selectedCapture.request.body)}</pre>
                 </section>
 
                 <section className="detail-section">
-                  <h2>Response</h2>
+                  <div className="detail-section-head">
+                    <h3>Response</h3>
+                    <span className="micro-label">
+                      {selectedCapture.response
+                        ? `${selectedCapture.response.status} ${selectedCapture.response.statusText}`
+                        : selectedCapture.state}
+                    </span>
+                  </div>
                   <pre className="json-view">
                     {JSON.stringify(
                       selectedCapture.response ?? {
@@ -433,13 +460,20 @@ export function App() {
                       2,
                     )}
                   </pre>
-                  <h3>Response Body</h3>
+                  <div className="detail-section-head secondary-head">
+                    <h4>Response Body</h4>
+                    <span className="micro-label">
+                      {selectedCapture.response?.body.contentType ?? "response pending"}
+                    </span>
+                  </div>
                   <pre className="body-view">{formatBody(selectedCapture.response?.body)}</pre>
                 </section>
               </div>
             </>
           ) : (
-            <p className="panel-copy">先从上面的 Recent Captures 里选择一条流量记录，这里会展开显示请求与响应的全部细节。</p>
+            <div className="empty-state detail-empty">
+              <p className="panel-copy">先从上面的 Recent Captures 里选择一条流量记录，这里会展开显示请求与响应的全部细节。</p>
+            </div>
           )}
         </article>
       </section>
