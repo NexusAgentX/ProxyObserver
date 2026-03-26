@@ -139,4 +139,5 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
-        run: gh release upload "$TAG_NAME" release-assets/* --clobber
+          REPOSITORY: ${{ github.repository }}
+        run: gh release upload "$TAG_NAME" release-assets/* --clobber --repo "$REPOSITORY"
