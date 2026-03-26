@@ -1,3 +1,6 @@
+export const appName = "ProxyObserver";
+export const dashboardPollIntervalMs = 1500;
+
 export const featureHighlights = [
   {
     title: "Transparent forwarding",

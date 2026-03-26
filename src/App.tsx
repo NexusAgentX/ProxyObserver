@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import "./index.css";
-import { appName, dashboardPollIntervalMs } from "./config";
-import { defaultListenerDraft, featureHighlights, quickNotes } from "./siteData";
+import { appName, dashboardPollIntervalMs, defaultListenerDraft, featureHighlights, quickNotes } from "./siteData";
 import type { BodySnapshot, CaptureRecord, CaptureSummary, ListenerSummary, OverviewResponse } from "./types";
 
 function formatDateTime(value: string | undefined) {
