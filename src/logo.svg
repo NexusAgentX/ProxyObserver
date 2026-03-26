@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <title>ProxyObserver Logo</title>
+  <defs>
+    <linearGradient id="beam" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#7ce0c3" />
+      <stop offset="100%" stop-color="#ffb56b" />
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="#081218" />
+  <circle cx="64" cy="64" r="38" fill="none" stroke="rgba(124,224,195,0.18)" stroke-width="8" />
+  <circle cx="64" cy="64" r="24" fill="none" stroke="rgba(124,224,195,0.32)" stroke-width="6" />
+  <path
+    d="M64 64 L97 46"
+    stroke="url(#beam)"
+    stroke-linecap="round"
+    stroke-width="8"
+  />
+  <path
+    d="M41 86 C51 76, 77 76, 87 86"
+    fill="none"
+    stroke="rgba(255,181,107,0.7)"
+    stroke-linecap="round"
+    stroke-width="6"
+  />
+  <circle cx="64" cy="64" r="9" fill="#ffb56b" />
+  <circle cx="97" cy="46" r="7" fill="#fff1dc" />
+</svg>
