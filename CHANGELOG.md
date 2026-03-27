@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/NexusAgentX/ProxyObserver/compare/proxy-observer-v0.3.1...proxy-observer-v0.3.2) (2026-03-27)
+
+
+### Bug Fixes
+
+* **ci:** retry release binary compilation ([#6](https://github.com/NexusAgentX/ProxyObserver/issues/6)) ([2b01157](https://github.com/NexusAgentX/ProxyObserver/commit/2b01157f9d7054d61e39bd522050de03dd72dc83))
+
 ## [0.3.1](https://github.com/NexusAgentX/ProxyObserver/compare/proxy-observer-v0.3.0...proxy-observer-v0.3.1) (2026-03-27)
 
 
