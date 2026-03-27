@@ -55,7 +55,7 @@ jobs:
             compile_target: bun-windows-x64
             binary_name: proxyobserver.exe
             archive_name: proxyobserver-windows-x64.zip
-          - os: windows-2022
+          - os: ubuntu-24.04
             target: windows-arm64
             compile_target: bun-windows-arm64
             binary_name: proxyobserver.exe
@@ -121,12 +121,16 @@ jobs:
           lipo -create -output dist/${{ matrix.binary_name }} dist/proxyobserver-x64 dist/proxyobserver-arm64
           rm dist/proxyobserver-x64 dist/proxyobserver-arm64
 
-      - name: Archive binary on Unix
-        if: runner.os != 'Windows'
+      - name: Archive tarball
+        if: ${{ !endsWith(matrix.archive_name, '.zip') }}
         run: tar -czf dist/${{ matrix.archive_name }} -C dist ${{ matrix.binary_name }}
 
-      - name: Archive binary on Windows
-        if: runner.os == 'Windows'
+      - name: Archive ZIP on Unix
+        if: ${{ runner.os != 'Windows' && endsWith(matrix.archive_name, '.zip') }}
+        run: zip -j dist/${{ matrix.archive_name }} dist/${{ matrix.binary_name }}
+
+      - name: Archive ZIP on Windows
+        if: ${{ runner.os == 'Windows' && endsWith(matrix.archive_name, '.zip') }}
         shell: pwsh
         run: Compress-Archive -Path "dist/${{ matrix.binary_name }}" -DestinationPath "dist/${{ matrix.archive_name }}"
 
