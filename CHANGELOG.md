@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/NexusAgentX/ProxyObserver/compare/proxy-observer-v0.3.0...proxy-observer-v0.3.1) (2026-03-27)
+
+
+### CI
+
+* **release:** add arm64 and universal build targets ([#4](https://github.com/NexusAgentX/ProxyObserver/issues/4)) ([938e3fb](https://github.com/NexusAgentX/ProxyObserver/commit/938e3fbb948c69f1bc0dc137b9a85d512031dd8a))
+
 ## [0.3.0](https://github.com/NexusAgentX/ProxyObserver/compare/proxy-observer-v0.2.0...proxy-observer-v0.3.0) (2026-03-27)
 
 
