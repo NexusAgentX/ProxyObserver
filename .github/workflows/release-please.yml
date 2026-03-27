@@ -95,9 +95,43 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Compile standalone binary
-        if: matrix.target != 'macos-universal'
-        run: bun build --compile --target=${{ matrix.compile_target }} ./src/index.ts --outfile dist/${{ matrix.binary_name }}
+      - name: Compile standalone binary on Unix
+        if: runner.os != 'Windows' && matrix.target != 'macos-universal'
+        run: |
+          set +e
+          for attempt in 1 2 3; do
+            bun build --compile --target=${{ matrix.compile_target }} ./src/index.ts --outfile dist/${{ matrix.binary_name }}
+            status=$?
+            if [ "$status" -eq 0 ]; then
+              exit 0
+            fi
+
+            if [ "$attempt" -lt 3 ]; then
+              echo "Compile failed (attempt $attempt/3), retrying in 5 seconds..."
+              sleep 5
+            fi
+          done
+
+          exit "$status"
+
+      - name: Compile standalone binary on Windows
+        if: runner.os == 'Windows' && matrix.target != 'macos-universal'
+        shell: pwsh
+        run: |
+          $maxAttempts = 3
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            bun build --compile --target=${{ matrix.compile_target }} ./src/index.ts --outfile dist/${{ matrix.binary_name }}
+            if ($LASTEXITCODE -eq 0) {
+              exit 0
+            }
+
+            if ($attempt -lt $maxAttempts) {
+              Write-Host "Compile failed (attempt $attempt/$maxAttempts), retrying in 5 seconds..."
+              Start-Sleep -Seconds 5
+            }
+          }
+
+          exit $LASTEXITCODE
 
       - name: Compile universal macOS binary
         if: matrix.target == 'macos-universal'
