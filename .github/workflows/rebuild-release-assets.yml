@@ -15,55 +15,17 @@ env:
   BUN_VERSION: 1.3.11
 
 jobs:
-  build-assets:
-    name: Build ${{ matrix.target }}
-    runs-on: ${{ matrix.os }}
+  build-linux-assets:
+    name: Build Linux and Windows assets
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       attestations: write
       id-token: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-24.04
-            target: linux-x64
-            compile_target: bun-linux-x64
-            binary_name: proxyobserver
-            archive_name: proxyobserver-linux-x64.tar.gz
-          - os: ubuntu-24.04
-            target: linux-arm64
-            compile_target: bun-linux-arm64
-            binary_name: proxyobserver
-            archive_name: proxyobserver-linux-arm64.tar.gz
-          - os: macos-15-intel
-            target: macos-x64
-            compile_target: bun-darwin-x64
-            binary_name: proxyobserver
-            archive_name: proxyobserver-macos-x64.tar.gz
-          - os: macos-14
-            target: macos-arm64
-            compile_target: bun-darwin-arm64
-            binary_name: proxyobserver
-            archive_name: proxyobserver-macos-arm64.tar.gz
-          - os: macos-14
-            target: macos-universal
-            binary_name: proxyobserver
-            archive_name: proxyobserver-macos-universal.tar.gz
-          - os: windows-2022
-            target: windows-x64
-            compile_target: bun-windows-x64
-            binary_name: proxyobserver.exe
-            archive_name: proxyobserver-windows-x64.zip
-          - os: ubuntu-24.04
-            target: windows-arm64
-            compile_target: bun-windows-arm64
-            binary_name: proxyobserver.exe
-            archive_name: proxyobserver-windows-arm64.zip
 
     steps:
       - name: Checkout tagged source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
         with:
           ref: ${{ inputs.tag_name }}
 
@@ -75,99 +37,177 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Compile standalone binary on Unix
-        if: runner.os != 'Windows' && matrix.target != 'macos-universal'
+      - name: Build Linux and Windows release assets
         run: |
-          set +e
-          for attempt in 1 2 3; do
-            bun build --compile --target=${{ matrix.compile_target }} ./src/index.ts --outfile dist/${{ matrix.binary_name }}
-            status=$?
-            if [ "$status" -eq 0 ]; then
-              exit 0
-            fi
+          set -euo pipefail
+          mkdir -p dist
 
-            if [ "$attempt" -lt 3 ]; then
-              echo "Compile failed (attempt $attempt/3), retrying in 5 seconds..."
-              sleep 5
-            fi
-          done
+          compile_with_retry() {
+            local compile_target="$1"
+            local output_path="$2"
+            local status=0
 
-          exit "$status"
+            for attempt in 1 2 3; do
+              if bun build --compile --target="$compile_target" ./src/index.ts --outfile "$output_path"; then
+                return 0
+              else
+                status=$?
+              fi
 
-      - name: Compile standalone binary on Windows
-        if: runner.os == 'Windows' && matrix.target != 'macos-universal'
-        shell: pwsh
-        run: |
-          $maxAttempts = 3
-          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-            bun build --compile --target=${{ matrix.compile_target }} ./src/index.ts --outfile dist/${{ matrix.binary_name }}
-            if ($LASTEXITCODE -eq 0) {
-              exit 0
-            }
+              if [ "$attempt" -lt 3 ]; then
+                echo "Compile failed for $compile_target (attempt $attempt/3), retrying in 5 seconds..."
+                sleep 5
+              fi
+            done
 
-            if ($attempt -lt $maxAttempts) {
-              Write-Host "Compile failed (attempt $attempt/$maxAttempts), retrying in 5 seconds..."
-              Start-Sleep -Seconds 5
-            }
+            return "$status"
           }
 
-          exit $LASTEXITCODE
+          package_archive() {
+            local input_path="$1"
+            local output_name="$2"
+            local archive_name="$3"
+            local archive_path="$PWD/dist/$archive_name"
+            local stage_dir
 
-      - name: Compile universal macOS binary
-        if: matrix.target == 'macos-universal'
-        run: |
-          bun build --compile --target=bun-darwin-x64 ./src/index.ts --outfile dist/proxyobserver-x64
-          bun build --compile --target=bun-darwin-arm64 ./src/index.ts --outfile dist/proxyobserver-arm64
-          lipo -create -output dist/${{ matrix.binary_name }} dist/proxyobserver-x64 dist/proxyobserver-arm64
-          rm dist/proxyobserver-x64 dist/proxyobserver-arm64
+            stage_dir="$(mktemp -d)"
+            cp "$input_path" "$stage_dir/$output_name"
 
-      - name: Archive tarball
-        if: ${{ !endsWith(matrix.archive_name, '.zip') }}
-        run: tar -czf dist/${{ matrix.archive_name }} -C dist ${{ matrix.binary_name }}
+            if [[ "$archive_name" == *.zip ]]; then
+              (cd "$stage_dir" && zip -q "$archive_path" "$output_name")
+            else
+              tar -czf "$archive_path" -C "$stage_dir" "$output_name"
+            fi
 
-      - name: Archive ZIP on Unix
-        if: ${{ runner.os != 'Windows' && endsWith(matrix.archive_name, '.zip') }}
-        run: zip -j dist/${{ matrix.archive_name }} dist/${{ matrix.binary_name }}
+            shasum -a 256 "$archive_path" > "$archive_path.sha256"
+            rm -rf "$stage_dir"
+            rm -f "$input_path"
+          }
 
-      - name: Archive ZIP on Windows
-        if: ${{ runner.os == 'Windows' && endsWith(matrix.archive_name, '.zip') }}
-        shell: pwsh
-        run: Compress-Archive -Path "dist/${{ matrix.binary_name }}" -DestinationPath "dist/${{ matrix.archive_name }}"
+          compile_with_retry bun-linux-x64 dist/proxyobserver-linux-x64
+          package_archive dist/proxyobserver-linux-x64 proxyobserver proxyobserver-linux-x64.tar.gz
 
-      - name: Create checksum on Unix
-        if: runner.os != 'Windows'
-        run: shasum -a 256 dist/${{ matrix.archive_name }} > dist/${{ matrix.archive_name }}.sha256
+          compile_with_retry bun-linux-arm64 dist/proxyobserver-linux-arm64
+          package_archive dist/proxyobserver-linux-arm64 proxyobserver proxyobserver-linux-arm64.tar.gz
 
-      - name: Create checksum on Windows
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $hash = (Get-FileHash "dist/${{ matrix.archive_name }}" -Algorithm SHA256).Hash.ToLower()
-          "$hash  ${{ matrix.archive_name }}" | Out-File -FilePath "dist/${{ matrix.archive_name }}.sha256" -Encoding ascii
+          compile_with_retry bun-windows-x64 dist/proxyobserver-windows-x64.exe
+          package_archive dist/proxyobserver-windows-x64.exe proxyobserver.exe proxyobserver-windows-x64.zip
+
+          compile_with_retry bun-windows-arm64 dist/proxyobserver-windows-arm64.exe
+          package_archive dist/proxyobserver-windows-arm64.exe proxyobserver.exe proxyobserver-windows-arm64.zip
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v3
         with:
-          subject-path: dist/${{ matrix.archive_name }}
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
 
       - name: Upload workflow artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.0
         with:
-          name: release-${{ matrix.target }}
+          name: release-linux-and-windows
           path: |
-            dist/${{ matrix.archive_name }}
-            dist/${{ matrix.archive_name }}.sha256
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sha256
+
+  build-macos-assets:
+    name: Build macOS assets
+    runs-on: macos-14
+    permissions:
+      contents: read
+      attestations: write
+      id-token: write
+
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ inputs.tag_name }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build macOS release assets
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          compile_with_retry() {
+            local compile_target="$1"
+            local output_path="$2"
+            local status=0
+
+            for attempt in 1 2 3; do
+              if bun build --compile --target="$compile_target" ./src/index.ts --outfile "$output_path"; then
+                return 0
+              else
+                status=$?
+              fi
+
+              if [ "$attempt" -lt 3 ]; then
+                echo "Compile failed for $compile_target (attempt $attempt/3), retrying in 5 seconds..."
+                sleep 5
+              fi
+            done
+
+            return "$status"
+          }
+
+          package_archive() {
+            local input_path="$1"
+            local output_name="$2"
+            local archive_name="$3"
+            local archive_path="$PWD/dist/$archive_name"
+            local stage_dir
+
+            stage_dir="$(mktemp -d)"
+            cp "$input_path" "$stage_dir/$output_name"
+            tar -czf "$archive_path" -C "$stage_dir" "$output_name"
+            shasum -a 256 "$archive_path" > "$archive_path.sha256"
+            rm -rf "$stage_dir"
+            rm -f "$input_path"
+          }
+
+          compile_with_retry bun-darwin-x64 dist/proxyobserver-macos-x64
+          compile_with_retry bun-darwin-arm64 dist/proxyobserver-macos-arm64
+          lipo -create -output dist/proxyobserver-macos-universal dist/proxyobserver-macos-x64 dist/proxyobserver-macos-arm64
+
+          package_archive dist/proxyobserver-macos-x64 proxyobserver proxyobserver-macos-x64.tar.gz
+          package_archive dist/proxyobserver-macos-arm64 proxyobserver proxyobserver-macos-arm64.tar.gz
+          package_archive dist/proxyobserver-macos-universal proxyobserver proxyobserver-macos-universal.tar.gz
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: dist/*.tar.gz
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v7.0.0
+        with:
+          name: release-macos
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
 
   publish-assets:
     name: Publish release assets
-    needs: build-assets
+    needs:
+      - build-linux-assets
+      - build-macos-assets
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
       - name: Download workflow artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8.0.1
         with:
           path: release-assets
           merge-multiple: true
