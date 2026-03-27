@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0](https://github.com/NexusAgentX/ProxyObserver/compare/proxy-observer-v0.2.0...proxy-observer-v0.3.0) (2026-03-27)
+
+
+### Features
+
+* add Zhipu Anthropic compatibility hook for Claude Code ([daf458b](https://github.com/NexusAgentX/ProxyObserver/commit/daf458b3b9c2b5075affb6c92b5a153ae36df4f2))
+
+
+### Bug Fixes
+
+* **ci:** add manual release asset rebuild workflow ([b8709bd](https://github.com/NexusAgentX/ProxyObserver/commit/b8709bdc6fcb3a3b95a64dacdaf8da9dfc9d462a))
+* **ci:** pass repository to release asset uploads ([7cb331f](https://github.com/NexusAgentX/ProxyObserver/commit/7cb331fca92b752d41dc50a4b23137ff9c53a60d))
+* **ci:** repair release asset publishing workflow ([86ae0e7](https://github.com/NexusAgentX/ProxyObserver/commit/86ae0e74e6e31fb7eeabf4ac0cda7eff1e2577dd))
+
 ## [0.2.0](https://github.com/NexusAgentX/ProxyObserver/compare/proxy-observer-v0.1.0...proxy-observer-v0.2.0) (2026-03-26)
 
 
