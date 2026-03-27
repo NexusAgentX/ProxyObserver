@@ -203,9 +203,12 @@ bun run commitlint
 6. 同一个 `Release` workflow 自动附加以下产物：
 
 - `proxyobserver-linux-x64.tar.gz`
+- `proxyobserver-linux-arm64.tar.gz`
 - `proxyobserver-macos-x64.tar.gz`
 - `proxyobserver-macos-arm64.tar.gz`
+- `proxyobserver-macos-universal.tar.gz`
 - `proxyobserver-windows-x64.zip`
+- `proxyobserver-windows-arm64.zip`
 - 每个资产对应的 `.sha256`
 - 汇总的 `checksums.txt`
 
