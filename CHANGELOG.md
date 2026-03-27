@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.3](https://github.com/NexusAgentX/ProxyObserver/compare/proxy-observer-v0.3.2...proxy-observer-v0.3.3) (2026-03-27)
+
+
+### Bug Fixes
+
+* **ci:** build windows arm64 release asset on linux ([96976e3](https://github.com/NexusAgentX/ProxyObserver/commit/96976e39cc3e568ad0bcc6c11cd0d8eda20feece))
+
+
+### Refactoring
+
+* **ci:** consolidate release runners ([45dfb52](https://github.com/NexusAgentX/ProxyObserver/commit/45dfb52838bdb9f1a98e77ad85719eb5b0f66aa3))
+
 ## [0.3.2](https://github.com/NexusAgentX/ProxyObserver/compare/proxy-observer-v0.3.1...proxy-observer-v0.3.2) (2026-03-27)
 
 
