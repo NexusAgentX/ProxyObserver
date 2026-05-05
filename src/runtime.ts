@@ -1,4 +1,4 @@
-import { adminPort, appName, captureLimit, listenHost } from "./config";
+import { adminPort, appName, captureLimit, idleTimeout, listenHost } from "./config";
 import type {
   BodySnapshot,
   CaptureRecord,
@@ -1032,6 +1032,7 @@ export async function upsertListener(input: ListenerPayload) {
   runtime.server = Bun.serve({
     hostname: listenHost,
     port,
+    idleTimeout,
     fetch: createProxyHandler(runtime),
     error(error) {
       return Response.json(
