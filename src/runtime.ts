@@ -1,4 +1,4 @@
-import { adminPort, appName, captureLimit, idleTimeout, listenHost } from "./config";
+import { adminPort, appName, captureBodyLimit, captureLimit, idleTimeout, listenHost } from "./config";
 import type {
   BodySnapshot,
   CaptureRecord,
@@ -912,7 +912,8 @@ function createProxyHandler(listener: ListenerRuntime) {
         return finalResponse;
       }
 
-      const responseClone = finalResponse.clone();
+      const contentType = finalResponse.headers.get("content-type");
+
       mutateCapture(record.id, capture => {
         capture.state = "completed";
         capture.completedAt = new Date().toISOString();
@@ -921,20 +922,66 @@ function createProxyHandler(listener: ListenerRuntime) {
           status: finalResponse.status,
           statusText: finalResponse.statusText,
           headers: captureHeaders(finalResponse.headers),
-          body: pendingBody(finalResponse.headers.get("content-type")),
+          body: pendingBody(contentType),
           durationMs,
         };
       });
 
-      void readBodySnapshot(responseClone).then(body => {
+      // Responses without a body (e.g. 204, 304, HEAD) have no stream to tap.
+      if (!finalResponse.body) {
         mutateCapture(record.id, capture => {
           if (capture.response) {
-            capture.response.body = body;
+            capture.response.body = emptyBody(contentType);
           }
         });
+
+        return finalResponse;
+      }
+
+      // Use a TransformStream to capture body chunks inline as they are
+      // streamed to the client.  This avoids response.clone(), which
+      // internally creates a ReadableStream tee whose controller can become
+      // null in Bun after 300+ seconds, crashing the process with
+      // "TypeError: null is not an object".
+      const capturedChunks: Uint8Array[] = [];
+      let capturedSize = 0;
+      let captureOverflow = false;
+
+      const captureTransform = new TransformStream<Uint8Array, Uint8Array>({
+        transform(chunk, controller) {
+          if (!captureOverflow) {
+            if (capturedSize + chunk.byteLength <= captureBodyLimit) {
+              capturedChunks.push(chunk);
+              capturedSize += chunk.byteLength;
+            } else {
+              captureOverflow = true;
+            }
+          }
+          controller.enqueue(chunk);
+        },
+        flush() {
+          const bytes = new Uint8Array(capturedSize);
+          let offset = 0;
+          for (const chunk of capturedChunks) {
+            bytes.set(chunk, offset);
+            offset += chunk.byteLength;
+          }
+
+          mutateCapture(record.id, capture => {
+            if (capture.response) {
+              capture.response.body = captureOverflow
+                ? { kind: "error", contentType, size: 0, error: "Response body exceeded capture limit" }
+                : bodySnapshotFromBufferedBody({ bytes, contentType });
+            }
+          });
+        },
       });
 
-      return finalResponse;
+      return new Response(finalResponse.body.pipeThrough(captureTransform), {
+        status: finalResponse.status,
+        statusText: finalResponse.statusText,
+        headers: finalResponse.headers,
+      });
     } catch (error) {
       const durationMs = Date.now() - startedAt;
 
