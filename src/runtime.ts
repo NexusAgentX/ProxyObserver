@@ -1,4 +1,4 @@
-import { adminPort, appName, captureLimit, idleTimeout, listenHost } from "./config";
+import { adminPort, appName, captureBodyLimit, captureLimit, idleTimeout, listenHost } from "./config";
 import type {
   BodySnapshot,
   CaptureRecord,
@@ -944,15 +944,23 @@ function createProxyHandler(listener: ListenerRuntime) {
       // null in Bun after 300+ seconds, crashing the process with
       // "TypeError: null is not an object".
       const capturedChunks: Uint8Array[] = [];
+      let capturedSize = 0;
+      let captureOverflow = false;
 
       const captureTransform = new TransformStream<Uint8Array, Uint8Array>({
         transform(chunk, controller) {
-          capturedChunks.push(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk));
+          if (!captureOverflow) {
+            if (capturedSize + chunk.byteLength <= captureBodyLimit) {
+              capturedChunks.push(chunk);
+              capturedSize += chunk.byteLength;
+            } else {
+              captureOverflow = true;
+            }
+          }
           controller.enqueue(chunk);
         },
         flush() {
-          const totalLength = capturedChunks.reduce((acc, c) => acc + c.byteLength, 0);
-          const bytes = new Uint8Array(totalLength);
+          const bytes = new Uint8Array(capturedSize);
           let offset = 0;
           for (const chunk of capturedChunks) {
             bytes.set(chunk, offset);
@@ -961,7 +969,9 @@ function createProxyHandler(listener: ListenerRuntime) {
 
           mutateCapture(record.id, capture => {
             if (capture.response) {
-              capture.response.body = bodySnapshotFromBufferedBody({ bytes, contentType });
+              capture.response.body = captureOverflow
+                ? { kind: "error", contentType, size: 0, error: "Response body exceeded capture limit" }
+                : bodySnapshotFromBufferedBody({ bytes, contentType });
             }
           });
         },
