@@ -912,7 +912,8 @@ function createProxyHandler(listener: ListenerRuntime) {
         return finalResponse;
       }
 
-      const responseClone = finalResponse.clone();
+      const contentType = finalResponse.headers.get("content-type");
+
       mutateCapture(record.id, capture => {
         capture.state = "completed";
         capture.completedAt = new Date().toISOString();
@@ -921,20 +922,56 @@ function createProxyHandler(listener: ListenerRuntime) {
           status: finalResponse.status,
           statusText: finalResponse.statusText,
           headers: captureHeaders(finalResponse.headers),
-          body: pendingBody(finalResponse.headers.get("content-type")),
+          body: pendingBody(contentType),
           durationMs,
         };
       });
 
-      void readBodySnapshot(responseClone).then(body => {
+      // Responses without a body (e.g. 204, 304, HEAD) have no stream to tap.
+      if (!finalResponse.body) {
         mutateCapture(record.id, capture => {
           if (capture.response) {
-            capture.response.body = body;
+            capture.response.body = emptyBody(contentType);
           }
         });
+
+        return finalResponse;
+      }
+
+      // Use a TransformStream to capture body chunks inline as they are
+      // streamed to the client.  This avoids response.clone(), which
+      // internally creates a ReadableStream tee whose controller can become
+      // null in Bun after 300+ seconds, crashing the process with
+      // "TypeError: null is not an object".
+      const capturedChunks: Uint8Array[] = [];
+
+      const captureTransform = new TransformStream<Uint8Array, Uint8Array>({
+        transform(chunk, controller) {
+          capturedChunks.push(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk));
+          controller.enqueue(chunk);
+        },
+        flush() {
+          const totalLength = capturedChunks.reduce((acc, c) => acc + c.byteLength, 0);
+          const bytes = new Uint8Array(totalLength);
+          let offset = 0;
+          for (const chunk of capturedChunks) {
+            bytes.set(chunk, offset);
+            offset += chunk.byteLength;
+          }
+
+          mutateCapture(record.id, capture => {
+            if (capture.response) {
+              capture.response.body = bodySnapshotFromBufferedBody({ bytes, contentType });
+            }
+          });
+        },
       });
 
-      return finalResponse;
+      return new Response(finalResponse.body.pipeThrough(captureTransform), {
+        status: finalResponse.status,
+        statusText: finalResponse.statusText,
+        headers: finalResponse.headers,
+      });
     } catch (error) {
       const durationMs = Date.now() - startedAt;
 
