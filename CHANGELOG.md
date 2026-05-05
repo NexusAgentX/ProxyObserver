@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.4](https://github.com/NexusAgentX/ProxyObserver/compare/proxy-observer-v0.3.3...proxy-observer-v0.3.4) (2026-05-05)
+
+
+### Bug Fixes
+
+* disable idle timeout on proxy listener servers to prevent TypeError on slow upstream responses ([#10](https://github.com/NexusAgentX/ProxyObserver/issues/10)) ([7f4124f](https://github.com/NexusAgentX/ProxyObserver/commit/7f4124f515b5958c8e9d10c7556bae719e99cc8c))
+
 ## [0.3.3](https://github.com/NexusAgentX/ProxyObserver/compare/proxy-observer-v0.3.2...proxy-observer-v0.3.3) (2026-03-27)
 
 
