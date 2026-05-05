@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.5](https://github.com/NexusAgentX/ProxyObserver/compare/proxy-observer-v0.3.4...proxy-observer-v0.3.5) (2026-05-05)
+
+
+### Bug Fixes
+
+* replace response.clone() with TransformStream to prevent crash on long-running streaming responses ([#12](https://github.com/NexusAgentX/ProxyObserver/issues/12)) ([db06dd8](https://github.com/NexusAgentX/ProxyObserver/commit/db06dd80f65542b03113ae58930e84a17a297ccd))
+
 ## [0.3.4](https://github.com/NexusAgentX/ProxyObserver/compare/proxy-observer-v0.3.3...proxy-observer-v0.3.4) (2026-05-05)
 
 
