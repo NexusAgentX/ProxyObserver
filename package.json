@@ -1,6 +1,6 @@
 {
   "name": "proxy-observer",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Observable transparent reverse proxy for inspecting real HTTP traffic between agents and upstream APIs.",
   "private": true,
   "type": "module",
